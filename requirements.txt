@@ -1,0 +1,7 @@
+mss
+pytesseract
+opencv-python
+Pillow
+numpy
+requests
+python-telegram-bot
