@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Aria Trading Dashboard</title>
+    <style id="theme-style">
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #000000;
+            --card-bg: #f1f1f1;
+            --highlight: #ff8c00;
+        }
+        [data-theme='dark'] {
+            --bg-color: #0e0e0e;
+            --text-color: #f0f0f0;
+            --card-bg: #1a1a1a;
+            --highlight: #00e5ff;
+        }
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Segoe UI', sans-serif;
+            padding: 10px;
+            margin: 0;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1.2fr;
+            gap: 12px;
+        }
+        .card {
+            background: var(--card-bg);
+            padding: 12px;
+            border-radius: 10px;
+            box-shadow: 0 0 6px #000;
+        }
+        .card h2 {
+            margin-top: 0;
+            font-size: 1.1rem;
+            color: var(--highlight);
+        }
+        .log-entry {
+            padding: 6px 10px;
+            font-size: 0.85rem;
+            margin-bottom: 6px;
+            background: #222;
+            border-left: 3px solid #0f0;
+            overflow-x: auto;
+        }
+        img.ocr {
+            max-width: 100%;
+            max-height: 260px;
+            border-radius: 6px;
+        }
+        .small-text {
+            font-size: 0.8rem;
+            color: #ccc;
+        }
+        .highlight {
+            color: var(--highlight);
+        }
+    </style>
+</head>
+<body>
+    <h2>📊 Aria Trading Dashboard 
+        <button style="float:right" onclick="toggleTheme()">🌓 Toggle Theme</button>
+    </h2>
+    <p id="countdown" class="highlight">5s to next scan</p>
+
+    <div class="grid">
+        <div class="card">
+            <h2>📷 OCR Snapshot</h2>
+            <!-- Updated to include timestamp for refreshing -->
+            <img src="/image?ts={{ image_timestamp }}" class="ocr" alt="Live Chart">
+        </div>
+
+        <div class="card">
+            <h2>💰 Investment Status</h2>
+            <p>Daily Budget: ₹2000</p>
+            <p>Invested: ₹{{ invested }}</p>
+            <p>Remaining: ₹{{ remaining }}</p>
+            <p class="small-text">Auto-updated from signal logs.</p>
+        </div>
+    </div>
+
+    <div class="card" style="margin-top: 12px;">
+        <h2>🟢 Recent Signals</h2>
+        {% for signal in signals %}
+            <div class="log-entry">{{ signal }}</div>
+        {% else %}
+            <p class="small-text">No trade signals detected yet.</p>
+        {% endfor %}
+    </div>
+
+    <div class="card" style="margin-top: 12px;">
+        <h2>📸 OCR Snapshots (Last Hour)</h2>
+        <div id="replay-grid" style="display: flex; flex-wrap: wrap; gap: 6px;"></div>
+        <p class="small-text">Click image to zoom in</p>
+    </div>
+
+    <script>
+        function startCountdown(seconds) {
+            const el = document.getElementById('countdown');
+            let remaining = seconds;
+            const timer = setInterval(() => {
+                el.textContent = remaining + "s to next scan";
+                remaining--;
+                if (remaining < 0) {
+                    clearInterval(timer);
+                    location.reload(); // Force UI reload
+                }
+            }, 1000);
+        }
+
+        // Theme persistence
+        function toggleTheme() {
+            const html = document.documentElement;
+            const theme = html.getAttribute("data-theme") === "dark" ? "light" : "dark";
+            html.setAttribute("data-theme", theme);
+            localStorage.setItem("theme", theme);
+        }
+
+        window.onload = () => {
+            const saved = localStorage.getItem("theme") || "light";
+            document.documentElement.setAttribute("data-theme", saved);
+
+            // 🔁 Start countdown each time page loads
+            startCountdown(5);
+
+            // 🖼️ Load replay thumbnails
+            fetch("/replay-images").then(r => r.json()).then(images => {
+                const grid = document.getElementById("replay-grid");
+                grid.innerHTML = "";
+                images.forEach(src => {
+                    const img = document.createElement("img");
+                    img.src = src;
+                    img.style = "width: 80px; border-radius: 4px; cursor: pointer;";
+                    img.onclick = () => window.open(src, "_blank");
+                    grid.appendChild(img);
+                });
+            });
+        };
+    </script>
+</body>
+</html>
