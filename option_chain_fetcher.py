@@ -57,3 +57,11 @@ def fetch_options(symbol="NIFTY"):
         print("[⚠️] No options found for the nearest expiry.")
 
     return chain
+
+def get_latest_filtered_options():
+    """Return simplified CE/PE options between ₹5-40 premium."""
+    raw = fetch_options()
+    return [
+        o for o in raw
+        if o.get("premium") and 5 <= o["premium"] <= 40 and o.get("volume", 0) > 3000
+    ]

@@ -2,6 +2,7 @@
 <html>
 <head>
     <title>Aria Trading Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style id="theme-style">
         :root {
             --bg-color: #ffffff;
@@ -19,12 +20,13 @@
             background-color: var(--bg-color);
             color: var(--text-color);
             font-family: 'Segoe UI', sans-serif;
-            padding: 10px;
             margin: 0;
+            padding: 10px;
+            transition: background-color 0.3s, color 0.3s;
         }
         .grid {
             display: grid;
-            grid-template-columns: 1fr 1.2fr;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
             gap: 12px;
         }
         .card {
@@ -32,6 +34,7 @@
             padding: 12px;
             border-radius: 10px;
             box-shadow: 0 0 6px #000;
+            transition: background 0.3s, box-shadow 0.3s;
         }
         .card h2 {
             margin-top: 0;
@@ -48,7 +51,7 @@
         }
         img.ocr {
             max-width: 100%;
-            max-height: 260px;
+            max-height: 200px;
             border-radius: 6px;
         }
         .small-text {
@@ -58,46 +61,85 @@
         .highlight {
             color: var(--highlight);
         }
+        .control {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+            margin-top: 5px;
+        }
+        .control input[type="number"] {
+            width: 100px;
+        }
     </style>
 </head>
 <body>
     <h2>📊 Aria Trading Dashboard 
         <button style="float:right" onclick="toggleTheme()">🌓 Toggle Theme</button>
     </h2>
-    <p id="countdown" class="highlight">5s to next scan</p>
+    <div class="control">
+        <label>💼 Daily Investment: ₹</label>
+        <input id="dailyInvest" type="number" value="2000" min="100" step="100">
+        <label>🤖 Use AI:</label>
+        <input id="useAI" type="checkbox" checked>
+        <span id="countdown" class="highlight">5s to next scan</span>
+    </div>
 
     <div class="grid">
         <div class="card">
             <h2>📷 OCR Snapshot</h2>
-            <!-- Updated to include timestamp for refreshing -->
-            <img src="/image?ts={{ image_timestamp }}" class="ocr" alt="Live Chart">
+            <img id="ocrImage" src="/image?ts={{ image_timestamp }}" class="ocr" alt="Live Chart">
         </div>
 
         <div class="card">
             <h2>💰 Investment Status</h2>
-            <p>Daily Budget: ₹2000</p>
+            <p>Daily Budget: ₹<span id="budget">2000</span></p>
             <p>Invested: ₹{{ invested }}</p>
             <p>Remaining: ₹{{ remaining }}</p>
             <p class="small-text">Auto-updated from signal logs.</p>
         </div>
-    </div>
 
-    <div class="card" style="margin-top: 12px;">
-        <h2>🟢 Recent Signals</h2>
-        {% for signal in signals %}
-            <div class="log-entry">{{ signal }}</div>
-        {% else %}
-            <p class="small-text">No trade signals detected yet.</p>
-        {% endfor %}
-    </div>
+        <div class="card">
+            <h2>📈 Simulated P&L</h2>
+            <canvas id="pnlChart" height="160"></canvas>
+        </div>
 
-    <div class="card" style="margin-top: 12px;">
-        <h2>📸 OCR Snapshots (Last Hour)</h2>
-        <div id="replay-grid" style="display: flex; flex-wrap: wrap; gap: 6px;"></div>
-        <p class="small-text">Click image to zoom in</p>
+        <div class="card">
+            <h2>🟢 Recent Signals</h2>
+            {% for signal in signals %}
+                <div class="log-entry">{{ signal }}</div>
+            {% else %}
+                <p class="small-text">No trade signals detected yet.</p>
+            {% endfor %}
+        </div>
+
+        <div class="card">
+            <h2>📸 OCR Snapshots (Last Hour)</h2>
+            <div id="replay-grid" style="display: flex; flex-wrap: wrap; gap: 6px;"></div>
+            <p class="small-text">Click image to zoom in</p>
+        </div>
+
+        <div class="card">
+            <h2>🧪 Backtest Mock Simulator</h2>
+            <p class="small-text">Coming soon: Simulate past OCR data and signals for insights.</p>
+        </div>
+
+        <div class="card">
+            <h2>📍 Potential Entries (Option Chain)</h2>
+            <ul id="pending-options">
+                <li class="small-text">Loading potential trades from NSE...</li>
+            </ul>
+        </div>
     </div>
 
     <script>
+        function toggleTheme() {
+            const html = document.documentElement;
+            const theme = html.getAttribute("data-theme") === "dark" ? "light" : "dark";
+            html.setAttribute("data-theme", theme);
+            localStorage.setItem("theme", theme);
+        }
+
         function startCountdown(seconds) {
             const el = document.getElementById('countdown');
             let remaining = seconds;
@@ -106,27 +148,19 @@
                 remaining--;
                 if (remaining < 0) {
                     clearInterval(timer);
-                    location.reload(); // Force UI reload
+                    refreshContent();
                 }
             }, 1000);
         }
 
-        // Theme persistence
-        function toggleTheme() {
-            const html = document.documentElement;
-            const theme = html.getAttribute("data-theme") === "dark" ? "light" : "dark";
-            html.setAttribute("data-theme", theme);
-            localStorage.setItem("theme", theme);
+        function refreshContent() {
+            // Refresh only image and data areas
+            const img = document.getElementById("ocrImage");
+            img.src = "/image?ts=" + new Date().getTime();
+            startCountdown(5);
         }
 
-        window.onload = () => {
-            const saved = localStorage.getItem("theme") || "light";
-            document.documentElement.setAttribute("data-theme", saved);
-
-            // 🔁 Start countdown each time page loads
-            startCountdown(5);
-
-            // 🖼️ Load replay thumbnails
+        function fetchReplayImages() {
             fetch("/replay-images").then(r => r.json()).then(images => {
                 const grid = document.getElementById("replay-grid");
                 grid.innerHTML = "";
@@ -138,7 +172,66 @@
                     grid.appendChild(img);
                 });
             });
-        };
+        }
+
+        function mockChart() {
+            const ctx = document.getElementById('pnlChart');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ["9:15", "9:30", "9:45", "10:00", "10:15", "10:30"],
+                    datasets: [{
+                        label: 'P&L (₹)',
+                        data: [0, 100, 80, 160, 120, 180],
+                        borderColor: 'lime',
+                        backgroundColor: 'rgba(0,255,0,0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    animation: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { color: 'var(--text-color)' } },
+                        y: { ticks: { color: 'var(--text-color)' } }
+                    }
+                }
+            });
+        }
+
+        window.onload = () => {
+            document.documentElement.setAttribute("data-theme", localStorage.getItem("theme") || "light");
+
+            const savedInvestment = localStorage.getItem("investment") || "2000";
+            const savedAI = localStorage.getItem("useAI") === "false" ? false : true;
+
+            document.getElementById("dailyInvest").value = savedInvestment;
+            document.getElementById("budget").innerText = savedInvestment;
+            document.getElementById("useAI").checked = savedAI;
+
+            document.getElementById("dailyInvest").addEventListener("change", e => {
+                localStorage.setItem("investment", e.target.value);
+                document.getElementById("budget").innerText = e.target.value;
+            });
+
+            document.getElementById("useAI").addEventListener("change", e => {
+                localStorage.setItem("useAI", e.target.checked);
+            });
+
+            startCountdown(5);
+            fetchReplayImages();
+            mockChart();
+
+            fetch("/mock-options").then(r => r.json()).then(data => {
+                const ul = document.getElementById("pending-options");
+                ul.innerHTML = "";
+                data.forEach(o => {
+                    const li = document.createElement("li");
+                    li.textContent = `${o.type} @ ₹${o.premium} | Strike: ${o.strike}`;
+                    ul.appendChild(li);
+                });
+            });
+        }
     </script>
 </body>
 </html>
